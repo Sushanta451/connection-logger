@@ -29,11 +29,11 @@ int main(){
         return 1;
     }
 
-    sockaddr_in addr{
-        .sin_family = AF_INET,
-        .sin_port = htons(8080),
-        .sin_addr.s_addr = hton1(INADDR_ANY)
-    };
+ sockaddr_in addr{
+    .sin_family = AF_INET,
+    .sin_port = htons(8080),
+    .sin_addr = { .s_addr = htonl(INADDR_ANY) }
+}
     
     //claim the socket, if its already being used then close it.
     if(bind(listener,reinterpret_cast<sockaddr*>(&addr),sizeof(addr)) == -1){
@@ -44,14 +44,37 @@ int main(){
     
 
     //opens up tcp
-    if(listen(listener,SOMAXCON) == -1){
-        std::cerr<< "Listen" << std::strerror(errno) << std::std::endl;
+    if(listen(listener,SOMAXCONN) == -1){
+        std::cerr<< "Listen" << std::strerror(errno) << std::endl;
         close(listener);
         return 1;
     }
 
     std::cout <<"wait for client" << std::endl;
-    
+
+    sockaddr_in client{};
+    socklen_t clientlength = sizeof(client);
+
+    int conn = accept(listener,reinterpret_cast<sockaddr*>(&client),&clientlength);
+
+    if(conn == -1){
+        std::cerr<<"ACCEPT FAILED" << std::strerror(errno) << std::endl;
+        close(listener);
+        return 1;
+    }
+
+    char ip[INET_ADDRSTRLEN]{};
+    inet_ntop(AF_INET,&client.sin_addr,ip,sizeof(ip));
+
+    std::cout << "Connection from " << ip << ':' << ntohs(client.sin_port) << '\n';
+    std::cout << "Listening socket is descriptor " << listener << '\n';
+    std::cout << "Connected socket is descriptor " << conn << '\n';
+
+    close(conn);
+    close(listener);
+    return 0;
+
+
 
 
 }
