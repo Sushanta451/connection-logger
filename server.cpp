@@ -29,15 +29,15 @@ int main(){
         return 1;
     }
 
- sockaddr_in addr{
-    .sin_family = AF_INET,
-    .sin_port = htons(8080),
-    .sin_addr = { .s_addr = htonl(INADDR_ANY) }
-}
+    sockaddr_in addr{};
+    addr.sin_family = AF_INET;
+    addr.sin_port = htons(8080);
+    addr.sin_addr.s_addr = htonl(INADDR_ANY);
     
     //claim the socket, if its already being used then close it.
-    if(bind(listener,reinterpret_cast<sockaddr*>(&addr),sizeof(addr)) == -1){
-        std::cerr << "bind failed" << std::strerror(errno) << std::endl;
+   if (bind(listener, reinterpret_cast<sockaddr*>(&addr), sizeof(addr)) == -1)
+    {
+        std::cerr << "bind() failed: " << std::strerror(errno) << '\n';
         close(listener);
         return 1;
     }
