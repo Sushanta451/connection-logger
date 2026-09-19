@@ -1,0 +1,296 @@
+{
+    "Networking includes": {
+        "scope": "cpp,c",
+        "prefix": ["netinc", "includes"],
+        "body": [
+            "#include <sys/socket.h>  // socket, setsockopt, bind, listen, accept, recv, send",
+            "#include <netinet/in.h>  // sockaddr_in, INADDR_ANY, IPPROTO_TCP",
+            "#include <arpa/inet.h>   // htons, htonl, ntohs, inet_ntop, inet_pton",
+            "#include <netdb.h>       // getaddrinfo, gai_strerror, addrinfo",
+            "#include <unistd.h>      // close, read, write",
+            "#include <cerrno>        // errno",
+            "#include <cstring>       // std::strerror, std::memset",
+            "#include <iostream>",
+            "$0"
+        ],
+        "description": "All the headers a POSIX socket program needs"
+    },
+
+    "socket() + error check": {
+        "scope": "cpp,c",
+        "prefix": ["sock", "socket"],
+        "body": [
+            "int ${1:listener}{socket(${2|AF_INET,AF_INET6,AF_UNSPEC|}, ${3|SOCK_STREAM,SOCK_DGRAM|}, 0)};",
+            "if ($1 == -1) {",
+            "    std::cerr << \"socket failed: \" << std::strerror(errno) << '\\n';",
+            "    return 1;",
+            "}",
+            "$0"
+        ],
+        "description": "Create a socket and bail out if it fails"
+    },
+
+    "setsockopt SO_REUSEADDR": {
+        "scope": "cpp,c",
+        "prefix": ["sso", "setsockopt", "reuseaddr"],
+        "body": [
+            "int yes{1};",
+            "if (setsockopt(${1:listener}, ${2|SOL_SOCKET,IPPROTO_TCP|}, ${3|SO_REUSEADDR,SO_REUSEPORT,SO_KEEPALIVE,TCP_NODELAY|}, &yes, sizeof(yes)) == -1) {",
+            "    std::cerr << \"setsockopt failed: \" << std::strerror(errno) << '\\n';",
+            "    return 1;",
+            "}",
+            "$0"
+        ],
+        "description": "setsockopt with SO_REUSEADDR so restarting the server doesn't hit 'Address already in use'"
+    },
+
+    "sockaddr_in struct": {
+        "scope": "cpp,c",
+        "prefix": ["sain", "sockaddr_in", "addr"],
+        "body": [
+            "sockaddr_in ${1:addr}{};",
+            "$1.sin_family = AF_INET;",
+            "$1.sin_port = htons(${2:8080});      // host byte order -> network byte order",
+            "$1.sin_addr.s_addr = htonl(${3|INADDR_ANY,INADDR_LOOPBACK|});",
+            "$0"
+        ],
+        "description": "Fill in an IPv4 address struct"
+    },
+
+    "bind() + error check": {
+        "scope": "cpp,c",
+        "prefix": ["bnd", "bind"],
+        "body": [
+            "if (bind(${1:listener}, reinterpret_cast<sockaddr*>(&${2:addr}), sizeof($2)) == -1) {",
+            "    std::cerr << \"bind failed: \" << std::strerror(errno) << '\\n';",
+            "    close($1);",
+            "    return 1;",
+            "}",
+            "$0"
+        ],
+        "description": "Attach the socket to a port"
+    },
+
+    "listen() + error check": {
+        "scope": "cpp,c",
+        "prefix": ["lsn", "listen"],
+        "body": [
+            "if (listen(${1:listener}, ${2:SOMAXCONN}) == -1) {",
+            "    std::cerr << \"listen failed: \" << std::strerror(errno) << '\\n';",
+            "    close($1);",
+            "    return 1;",
+            "}",
+            "std::cout << \"listening on port ${3:8080}\\n\";",
+            "$0"
+        ],
+        "description": "Mark the socket as passive (ready to accept)"
+    },
+
+    "accept() one client": {
+        "scope": "cpp,c",
+        "prefix": ["acc", "accept"],
+        "body": [
+            "sockaddr_in ${1:client}{};",
+            "socklen_t ${1}_len{sizeof($1)};",
+            "int ${2:conn}{accept(${3:listener}, reinterpret_cast<sockaddr*>(&$1), &${1}_len)};",
+            "if ($2 == -1) {",
+            "    std::cerr << \"accept failed: \" << std::strerror(errno) << '\\n';",
+            "    return 1;",
+            "}",
+            "$0"
+        ],
+        "description": "Block until a client connects, returning a new fd for that client"
+    },
+
+    "accept loop": {
+        "scope": "cpp,c",
+        "prefix": ["alp", "acceptloop"],
+        "body": [
+            "while (true) {",
+            "    sockaddr_in client{};",
+            "    socklen_t client_len{sizeof(client)};",
+            "    int conn{accept(${1:listener}, reinterpret_cast<sockaddr*>(&client), &client_len)};",
+            "    if (conn == -1) {",
+            "        std::cerr << \"accept failed: \" << std::strerror(errno) << '\\n';",
+            "        continue;",
+            "    }",
+            "",
+            "    char ip[INET_ADDRSTRLEN];",
+            "    inet_ntop(AF_INET, &client.sin_addr, ip, sizeof(ip));",
+            "    std::cout << \"connection from \" << ip << ':' << ntohs(client.sin_port) << '\\n';",
+            "",
+            "    $0",
+            "",
+            "    close(conn);",
+            "}"
+        ],
+        "description": "Serve clients forever, one at a time"
+    },
+
+    "recv() + the three cases": {
+        "scope": "cpp,c",
+        "prefix": ["rcv", "recv"],
+        "body": [
+            "char ${1:buf}[${2:1024}];",
+            "ssize_t ${3:n}{recv(${4:conn}, $1, sizeof($1), 0)};",
+            "if ($3 == -1) {",
+            "    std::cerr << \"recv failed: \" << std::strerror(errno) << '\\n';",
+            "} else if ($3 == 0) {",
+            "    std::cout << \"client closed the connection\\n\";",
+            "} else {",
+            "    $0",
+            "}"
+        ],
+        "description": "Read from a client. -1 is an error, 0 means they hung up, >0 is byte count"
+    },
+
+    "send() all bytes": {
+        "scope": "cpp,c",
+        "prefix": ["snd", "sendall", "send"],
+        "body": [
+            "// send() may send fewer bytes than asked, so loop until it's all out",
+            "size_t total{0};",
+            "while (total < ${1:len}) {",
+            "    ssize_t sent{send(${2:conn}, ${3:buf} + total, $1 - total, 0)};",
+            "    if (sent == -1) {",
+            "        std::cerr << \"send failed: \" << std::strerror(errno) << '\\n';",
+            "        break;",
+            "    }",
+            "    total += static_cast<size_t>(sent);",
+            "}",
+            "$0"
+        ],
+        "description": "Send a whole buffer, handling partial sends"
+    },
+
+    "inet_ntop print peer IP": {
+        "scope": "cpp,c",
+        "prefix": ["ntop", "inet_ntop", "printip"],
+        "body": [
+            "char ${1:ip}[INET_ADDRSTRLEN];",
+            "inet_ntop(AF_INET, &${2:client}.sin_addr, $1, sizeof($1));",
+            "std::cout << $1 << ':' << ntohs($2.sin_port) << '\\n';",
+            "$0"
+        ],
+        "description": "Turn a binary address into a readable string like 127.0.0.1"
+    },
+
+    "getaddrinfo block": {
+        "scope": "cpp,c",
+        "prefix": ["gai", "getaddrinfo"],
+        "body": [
+            "addrinfo hints{};",
+            "hints.ai_family = ${1|AF_UNSPEC,AF_INET,AF_INET6|};  // AF_UNSPEC = IPv4 or IPv6",
+            "hints.ai_socktype = SOCK_STREAM;",
+            "hints.ai_flags = AI_PASSIVE;                // fill in my IP for me",
+            "",
+            "addrinfo* res{};",
+            "int rv{getaddrinfo(${2:nullptr}, \"${3:8080}\", &hints, &res)};",
+            "if (rv != 0) {",
+            "    std::cerr << \"getaddrinfo: \" << gai_strerror(rv) << '\\n';  // not errno!",
+            "    return 1;",
+            "}",
+            "",
+            "$0",
+            "",
+            "freeaddrinfo(res);"
+        ],
+        "description": "Resolve a host/port without hardcoding sockaddr_in (works for IPv4 and IPv6)"
+    },
+
+    "POSIX error check": {
+        "scope": "cpp,c",
+        "prefix": ["nck", "errcheck"],
+        "body": [
+            "if (${1:call} == -1) {",
+            "    std::cerr << \"${2:$1} failed: \" << std::strerror(errno) << '\\n';",
+            "    return 1;",
+            "}",
+            "$0"
+        ],
+        "description": "The -1 / errno check that wraps almost every socket call"
+    },
+
+    "cast to sockaddr*": {
+        "scope": "cpp,c",
+        "prefix": ["sa", "castaddr"],
+        "body": [
+            "reinterpret_cast<sockaddr*>(&${1:addr})$0"
+        ],
+        "description": "The cast bind/accept/connect always want"
+    },
+
+    "Full TCP server skeleton": {
+        "scope": "cpp,c",
+        "prefix": ["tcpserver", "srv"],
+        "body": [
+            "#include <sys/socket.h>",
+            "#include <netinet/in.h>",
+            "#include <arpa/inet.h>",
+            "#include <unistd.h>",
+            "#include <cerrno>",
+            "#include <cstring>",
+            "#include <iostream>",
+            "",
+            "int main() {",
+            "    // 1. create the socket",
+            "    int listener{socket(AF_INET, SOCK_STREAM, 0)};",
+            "    if (listener == -1) {",
+            "        std::cerr << \"socket failed: \" << std::strerror(errno) << '\\n';",
+            "        return 1;",
+            "    }",
+            "",
+            "    // 2. let the port be reused immediately after a restart",
+            "    int yes{1};",
+            "    if (setsockopt(listener, SOL_SOCKET, SO_REUSEADDR, &yes, sizeof(yes)) == -1) {",
+            "        std::cerr << \"setsockopt failed: \" << std::strerror(errno) << '\\n';",
+            "        return 1;",
+            "    }",
+            "",
+            "    // 3. pick the address and port",
+            "    sockaddr_in addr{};",
+            "    addr.sin_family = AF_INET;",
+            "    addr.sin_port = htons(${1:8080});",
+            "    addr.sin_addr.s_addr = htonl(INADDR_ANY);",
+            "",
+            "    // 4. claim it",
+            "    if (bind(listener, reinterpret_cast<sockaddr*>(&addr), sizeof(addr)) == -1) {",
+            "        std::cerr << \"bind failed: \" << std::strerror(errno) << '\\n';",
+            "        close(listener);",
+            "        return 1;",
+            "    }",
+            "",
+            "    // 5. start queueing incoming connections",
+            "    if (listen(listener, SOMAXCONN) == -1) {",
+            "        std::cerr << \"listen failed: \" << std::strerror(errno) << '\\n';",
+            "        close(listener);",
+            "        return 1;",
+            "    }",
+            "    std::cout << \"listening on port $1\\n\";",
+            "",
+            "    // 6. serve clients",
+            "    while (true) {",
+            "        sockaddr_in client{};",
+            "        socklen_t client_len{sizeof(client)};",
+            "        int conn{accept(listener, reinterpret_cast<sockaddr*>(&client), &client_len)};",
+            "        if (conn == -1) {",
+            "            std::cerr << \"accept failed: \" << std::strerror(errno) << '\\n';",
+            "            continue;",
+            "        }",
+            "",
+            "        char ip[INET_ADDRSTRLEN];",
+            "        inet_ntop(AF_INET, &client.sin_addr, ip, sizeof(ip));",
+            "        std::cout << \"connection from \" << ip << ':' << ntohs(client.sin_port) << '\\n';",
+            "",
+            "        $0",
+            "",
+            "        close(conn);",
+            "    }",
+            "",
+            "    close(listener);",
+            "    return 0;",
+            "}"
+        ],
+        "description": "A complete, working single-client-at-a-time TCP server"
+    }
+}

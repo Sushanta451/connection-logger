@@ -1,0 +1,54 @@
+{
+    // --- make suggestions show up eagerly ---
+    "editor.tabCompletion": "on",
+    "editor.quickSuggestions": {
+        "other": true,
+        "comments": false,
+        "strings": false
+    },
+    "editor.suggestSelection": "first",
+    "editor.parameterHints.enabled": true,
+
+    // rank things declared NEAR the cursor higher, so a variable you
+    // declared 5 lines up beats an identical name from a system header
+    "editor.suggest.localityBonus": true,
+
+    // mix snippets in by relevance instead of pinning them above your
+    // own variables: "lsn" still hits the listen snippet, but typing
+    // "listener" now offers your variable first
+    "editor.snippetSuggestions": "inline",
+    "editor.suggest.snippetsPreventQuickSuggestions": false,
+
+    // show variables/fields/functions in the list, and preview the
+    // selected one as ghost text before you commit it
+    "editor.suggest.showVariables": true,
+    "editor.suggest.showFields": true,
+    "editor.suggest.showFunctions": true,
+    "editor.suggest.preview": true,
+
+    // completing over a typo replaces the rest of the word:
+    // "listner" -> put the cursor in it, pick "listener", whole word is fixed
+    "editor.suggest.insertMode": "replace",
+
+    // --- C/C++ IntelliSense ---
+    "C_Cpp.autocomplete": "default",
+    "C_Cpp.intelliSenseEngine": "default",
+    "C_Cpp.autocompleteAddParentheses": true,
+    "C_Cpp.default.cppStandard": "c++20",
+    "C_Cpp.default.compilerPath": "/usr/bin/clang++",
+
+    // show argument names inline, e.g. setsockopt(socket: listener, level: SOL_SOCKET, ...)
+    "C_Cpp.inlayHints.parameterNames.enabled": true,
+    "C_Cpp.inlayHints.parameterNames.hideLeadingUnderscores": true,
+    "C_Cpp.inlayHints.referenceOperator.enabled": true,
+    // show the deduced type of `auto` / brace-init declarations
+    "C_Cpp.inlayHints.autoDeclarationTypes.enabled": true,
+    "C_Cpp.inlayHints.autoDeclarationTypes.showOnLeft": true,
+
+    "[cpp]": {
+        // fallback: plain words from this file. IntelliSense handles declared
+        // variables properly, but while a line is half-typed the parser can
+        // choke -- this keeps "listener" completable anyway.
+        "editor.wordBasedSuggestions": "currentDocument"
+    }
+}
