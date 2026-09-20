@@ -16,7 +16,7 @@ int main(){
         return 1;
     }
 
-     sockaddr_in server{};
+    sockaddr_in server{};
     server.sin_family = AF_INET;
     server.sin_port = htons(8080);
 
