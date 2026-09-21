@@ -1,4 +1,9 @@
 {
+    // --- autosave ---
+    // write to disk on every keystroke -- no delay, no dirty dot
+    "files.autoSave": "afterDelay",
+    "files.autoSaveDelay": 0,
+
     // --- make suggestions show up eagerly ---
     "editor.tabCompletion": "on",
     "editor.quickSuggestions": {
