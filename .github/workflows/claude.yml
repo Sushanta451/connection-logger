@@ -1,0 +1,45 @@
+name: Claude
+
+# Interactive Claude on issues and PRs — NOT a gate. Mention @claude in a
+# comment ("@claude why does recv return 0 here?", "@claude add a test for the
+# partial-send path") and it answers or pushes a commit to the PR branch.
+# The merge gate is claude-review.yml; this workflow never blocks a merge.
+
+on:
+  issue_comment:
+    types: [created]
+  pull_request_review_comment:
+    types: [created]
+  issues:
+    types: [opened, assigned]
+
+jobs:
+  claude:
+    name: Claude (@mention)
+    if: >-
+      ${{
+        (github.event_name == 'issue_comment' && contains(github.event.comment.body, '@claude')) ||
+        (github.event_name == 'pull_request_review_comment' && contains(github.event.comment.body, '@claude')) ||
+        (github.event_name == 'issues' && contains(github.event.issue.body, '@claude'))
+      }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    permissions:
+      contents: write
+      pull-requests: write
+      issues: write
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: anthropics/claude-code-action@v1
+        with:
+          anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
+          claude_args: |
+            --model claude-opus-5
+            --max-turns 40
+            --allowedTools "Read,Grep,Glob,Edit,Write,Bash(./scripts/dev.sh:*),Bash(cmake:*),Bash(ctest:*),Bash(git diff:*),Bash(git log:*),Bash(gh pr diff:*),Bash(gh pr view:*)"
+            --append-system-prompt "Read CLAUDE.md before answering or editing. This repository is hand-written POSIX socket code: check every syscall return, close every descriptor on every path, and never commit with a Co-Authored-By or AI attribution trailer."

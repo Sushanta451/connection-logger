@@ -1,0 +1,32 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(./scripts/dev.sh build:*)",
+      "Bash(./scripts/dev.sh test:*)",
+      "Bash(./scripts/dev.sh lint:*)",
+      "Bash(./scripts/dev.sh fmt:*)",
+      "Bash(./scripts/dev.sh ci:*)",
+      "Bash(./scripts/dev.sh clean)",
+      "Bash(cmake -S . -B build:*)",
+      "Bash(cmake --build build:*)",
+      "Bash(ctest --test-dir build:*)",
+      "Bash(ctest --test-dir build-asan:*)",
+      "Bash(clang-tidy -p build:*)",
+      "Bash(clang++ -std=c++20 -fsyntax-only:*)",
+      "Bash(git status:*)",
+      "Bash(git diff:*)",
+      "Bash(git log:*)",
+      "Bash(git branch:*)",
+      "Bash(gh pr view:*)",
+      "Bash(gh pr diff:*)",
+      "Bash(gh pr checks:*)",
+      "Bash(gh run view:*)",
+      "Bash(gh run list:*)"
+    ],
+    "deny": [
+      "Bash(git commit:*)",
+      "Bash(git push:*)",
+      "Bash(./scripts/setup_repo.sh:*)"
+    ]
+  }
+}

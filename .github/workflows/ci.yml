@@ -1,0 +1,120 @@
+name: CI
+
+on:
+  pull_request:
+    branches: ["*"]
+  push:
+    branches: [main]
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    # Two compilers because socket code is exactly where GCC and Clang disagree
+    # about conversions and aliasing. Warnings are errors here (-DCONNLOG_WERROR=ON).
+    name: build (${{ matrix.compiler }})
+    runs-on: ubuntu-24.04
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - compiler: gcc
+            cxx: g++-14
+          - compiler: clang
+            cxx: clang++-18
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install toolchain
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y cmake ninja-build ${{ matrix.compiler == 'gcc' && 'g++-14' || 'clang-18' }}
+
+      - name: Configure
+        run: |
+          cmake -S . -B build -G Ninja \
+            -DCMAKE_CXX_COMPILER=${{ matrix.cxx }} \
+            -DCMAKE_BUILD_TYPE=Debug \
+            -DCONNLOG_WERROR=ON \
+            -DBUILD_TESTING=ON
+
+      - name: Build
+        run: cmake --build build
+
+      - name: Test
+        run: ctest --test-dir build --output-on-failure
+
+  sanitizers:
+    # The smoke test drives the real binaries over a real socket, so ASan/UBSan
+    # here covers the buffer handling in the recv loop.
+    name: tests (ASan + UBSan)
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install toolchain
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y cmake ninja-build clang-18
+
+      - name: Configure with sanitizers
+        run: |
+          cmake -S . -B build-asan -G Ninja \
+            -DCMAKE_CXX_COMPILER=clang++-18 \
+            -DCMAKE_BUILD_TYPE=Debug \
+            -DENABLE_ASAN=ON \
+            -DBUILD_TESTING=ON
+
+      - name: Build
+        run: cmake --build build-asan
+
+      - name: Test
+        env:
+          ASAN_OPTIONS: detect_leaks=1:abort_on_error=0
+          UBSAN_OPTIONS: print_stacktrace=1:halt_on_error=1
+        run: ctest --test-dir build-asan --output-on-failure
+
+  lint:
+    name: clang-tidy
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install toolchain
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y cmake ninja-build clang-18 clang-tidy-18
+
+      - name: Configure (generate compile_commands.json)
+        run: |
+          cmake -S . -B build -G Ninja \
+            -DCMAKE_CXX_COMPILER=clang++-18 \
+            -DCMAKE_EXPORT_COMPILE_COMMANDS=ON \
+            -DBUILD_TESTING=OFF
+
+      - name: Run clang-tidy
+        # Lints every translation unit the configure step actually compiled, so
+        # new .cpp files are covered the moment CMake knows about them.
+        run: |
+          set -euo pipefail
+          TUS=$(grep -oE '"file": *"[^"]*"' build/compile_commands.json \
+            | sed -E 's/"file": *"(.*)"/\1/' | sort -u)
+          if [ -z "$TUS" ]; then
+            echo "No translation units found in compile_commands.json" >&2
+            exit 1
+          fi
+          echo "Linting:"
+          echo "$TUS" | sed 's/^/  /'
+          # shellcheck disable=SC2086
+          clang-tidy-18 -p build $TUS
+
+  shellcheck:
+    name: shellcheck
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - name: Run shellcheck
+        run: shellcheck scripts/*.sh tests/*.sh

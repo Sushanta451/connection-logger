@@ -1,0 +1,98 @@
+name: Claude Review
+
+# The merge gate. Claude reads the PR diff against the rules in CLAUDE.md and
+# returns a machine-checkable verdict; this job fails when that verdict is
+# "request_changes". Branch protection lists "Claude review" as a required
+# status check, so a PR cannot be merged into main until Claude approves it.
+#
+# Re-running a failed review: push a fix (a new commit re-triggers this), or
+# use "Re-run failed jobs" in the Actions tab.
+
+on:
+  pull_request:
+    types: [opened, reopened, synchronize, ready_for_review]
+
+concurrency:
+  group: claude-review-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  claude-review:
+    # Keep this job name in sync with .github/rulesets/main.json — branch
+    # protection matches the check by this exact name.
+    name: Claude review
+    if: github.event.pull_request.draft == false
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    permissions:
+      contents: read
+      pull-requests: write
+      issues: write
+
+    steps:
+      - name: Checkout PR head
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          fetch-depth: 0
+
+      - name: Claude review
+        id: claude
+        uses: anthropics/claude-code-action@v1
+        with:
+          anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
+          track_progress: true
+          prompt: |
+            REPO: ${{ github.repository }}
+            PR NUMBER: ${{ github.event.pull_request.number }}
+
+            You are the reviewer of record for this pull request. Nothing merges into main unless
+            you approve it, so review like the person who will own this code, not like a linter.
+            The PR branch is already checked out in the working directory.
+
+            Start by reading CLAUDE.md and CONTRIBUTING.md in the repository root. They define the
+            conventions for this project; enforce them. Then read the diff
+            (`gh pr diff ${{ github.event.pull_request.number }}`) and open whatever surrounding
+            files you need to judge it in context.
+
+            This is hand-written POSIX socket code. Block the PR when the diff contains any of:
+              * a syscall whose return value is not checked (socket, setsockopt, bind, listen,
+                accept, connect, recv, send, close, inet_pton, getaddrinfo)
+              * a file descriptor that can leak on an error path
+              * a read into a fixed buffer without bounding it by the buffer size, or treating a
+                recv buffer as a NUL-terminated string
+              * recv/send used as if they transfer everything at once — a partial send, a recv
+                returning 0 (peer hung up), or EINTR handled incorrectly
+              * host/network byte-order confusion (a missing htons/ntohs/htonl/ntohl)
+              * undefined behaviour, a use-after-close, or a signed/unsigned bug
+              * a change that breaks the tests in tests/, or new behaviour with no test when it
+                could reasonably have one
+              * a secret, credential, or private address committed to the repo
+              * a violation of a rule stated in CLAUDE.md
+
+            Do not block on: formatting, naming preferences, comment style, or refactors you would
+            have written differently. Those go in non_blocking_notes. An empty or trivial diff is
+            not a reason to block.
+
+            Post an inline comment on each blocking issue with
+            `mcp__github_inline_comment__create_inline_comment` (pass `confirmed: true`), anchored
+            to the line it concerns, saying what breaks and under what input. Use `gh pr comment`
+            once for the overall summary. Post your feedback as GitHub comments — don't leave it
+            only in your reply text.
+
+            Finish by returning your verdict in the required JSON schema. "approve" means you would
+            merge this as it stands. "request_changes" means at least one blocking issue above is
+            present, and blocking_issues must list every one of them.
+          claude_args: |
+            --model claude-opus-5
+            --max-turns 40
+            --allowedTools "mcp__github_inline_comment__create_inline_comment,Bash(gh pr comment:*),Bash(gh pr diff:*),Bash(gh pr view:*),Bash(git diff:*),Bash(git log:*),Bash(git show:*)"
+            --json-schema '{"type":"object","additionalProperties":false,"required":["verdict","summary","blocking_issues","non_blocking_notes"],"properties":{"verdict":{"type":"string","enum":["approve","request_changes"]},"summary":{"type":"string","description":"Two sentences at most, for the check summary."},"blocking_issues":{"type":"array","items":{"type":"object","additionalProperties":false,"required":["file","line","issue","impact"],"properties":{"file":{"type":"string"},"line":{"type":"integer"},"issue":{"type":"string"},"impact":{"type":"string","description":"The concrete failure: which input or sequence produces which wrong result."}}}},"non_blocking_notes":{"type":"array","items":{"type":"string"}}}}'
+
+      - name: Enforce verdict
+        if: always()
+        env:
+          REVIEW: ${{ steps.claude.outputs.structured_output }}
+          CONCLUSION: ${{ steps.claude.outputs.conclusion }}
+        run: python3 .github/scripts/enforce_review.py
