@@ -16,10 +16,10 @@ syscall over a library that wraps it.
 
 | Path | What it is |
 | --- | --- |
-| `server_v2.cpp` | Current server. Accepts one connection, logs every chunk until the peer hangs up. Built as `connlog-server`. |
-| `server.cpp` | v1 server. Accepts one connection, logs the peer address and the descriptor numbers, exits. Built as `connlog-server-v1`. Kept as a reference for the minimal accept path. |
-| `client_v2.cpp` | Current client. Sends a message in three parts through a send-all loop; `slow` as argv[1] spaces them 500ms apart so the server logs separate chunks. Built as `connlog-client`. |
-| `client.cpp` | v1 client. Connects, prints its own address via `getsockname`, closes. Built as `connlog-client-v1`. |
+| `src/server/server_v2.cpp` | Current server. Accepts one connection, logs every chunk until the peer hangs up. Built as `connlog-server`. |
+| `src/server/server.cpp` | v1 server. Accepts one connection, logs the peer address and the descriptor numbers, exits. Built as `connlog-server-v1`. Kept as a reference for the minimal accept path. |
+| `src/client/client_v2.cpp` | Current client. Sends a message in three parts through a send-all loop; `slow` as argv[1] spaces them 500ms apart so the server logs separate chunks. Built as `connlog-client`. |
+| `src/client/client.cpp` | v1 client. Connects, prints its own address via `getsockname`, closes. Built as `connlog-client-v1`. |
 | `CMakeLists.txt` | Build + test definitions. Warning and sanitizer flags live in the `connlog_flags` interface target. |
 | `tests/smoke_test.sh` | End-to-end test: runs a real server and a real client against each other and asserts on the server's log. |
 | `scripts/dev.sh` | The dev CLI. Every routine task goes through it. |
@@ -104,8 +104,8 @@ These are what the PR review gate enforces. Violating one blocks the merge.
 - This code is developed on macOS and built on Linux in CI, and the socket APIs
   differ. `SO_NOSIGPIPE` is BSD/macOS only; Linux suppresses SIGPIPE with the
   `MSG_NOSIGNAL` flag on each `send` instead. Guard platform-specific options
-  with `#ifdef` and provide the other platform's equivalent — `client_v2.cpp`
-  shows the pattern. CI builds on Linux, so a macOS-only symbol fails the build.
+  with `#ifdef` and provide the other platform's equivalent —
+  `src/client/client_v2.cpp` shows the pattern. CI builds on Linux, so a macOS-only symbol fails the build.
 
 ## Testing
 
@@ -117,6 +117,11 @@ port and must never run concurrently.
 New behaviour needs a test unless there is a reason it can't have one; say so in
 the PR when there is. Add cases by adding an `add_test` entry with the lines the
 server should log.
+
+A new program goes in `src/server/` or `src/client/` and gets its own
+`add_executable` linking `connlog_flags`. Nothing else needs touching — the
+clang-tidy job lints every translation unit CMake knows about, so a new file is
+covered as soon as it builds.
 
 ## Branch strategy
 
