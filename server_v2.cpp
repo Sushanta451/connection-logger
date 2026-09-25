@@ -13,13 +13,14 @@ int main()
     int listener{socket(AF_INET,SOCK_STREAM,0)};
     
     if(listener == -1){
-        std::cerr<< "socket failed" << std::endl;
+        std::cerr<< "socket failed" << std::strerror(errno) << std::endl;
         return 1;
     }
 
     int yes{1};
     if (setsockopt(listener, SOL_SOCKET, SO_REUSEADDR, &yes, sizeof(yes)) == -1) {
         std::cerr << "setsockopt failed: " << std::strerror(errno) << '\n';
+        close(listener);
         return 1;
     }
 
@@ -30,11 +31,14 @@ int main()
 
     if(bind(listener,reinterpret_cast<sockaddr*>(&addr),sizeof(addr)) == -1){
         std::cerr << "Bind failed" << std::strerror(errno) << std::endl;
+        close(listener);
         return 1;
     }
 
     if(listen(listener,SOMAXCONN) == -1){
-        std::cerr << "Listen failed" << std::endl;
+        std::cerr << "Listen failed" << std::strerror(errno) << std::endl;
+        close(listener);
+        return 1;
     }
 
     std::cout << "Listening to port 8080" << std::endl;
@@ -42,7 +46,8 @@ int main()
     int conn{accept(listener,nullptr,nullptr)};
 
     if(conn == -1){
-        std::cerr << "accept failed" << std::endl;
+        std::cerr << "accept failed" << std::strerror(errno) << std::endl;
+        close(listener);
         return 1;
     }
 
@@ -56,6 +61,7 @@ int main()
         
         if(n == 0){
             std::cout << "Client closed the connection" << std::endl;
+            break;
         }
 
         if(n == -1){
@@ -63,11 +69,12 @@ int main()
                 continue;
             }
             std::cerr << "recv failed" << std::strerror(errno)<< std::endl;
+            break;
         }
 
         chuck++;
         std::cout << "chuck " << chuck << ":" << n << "bytes [ " <<
-        string_view(buffer, static_cast<std::size_t>(n)) << "]" << std::endl;
+        std::string_view(buffer, static_cast<std::size_t>(n)) << "]" << std::endl;
     }
 
     close(conn);

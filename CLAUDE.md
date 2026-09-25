@@ -18,7 +18,8 @@ syscall over a library that wraps it.
 | --- | --- |
 | `server_v2.cpp` | Current server. Accepts one connection, logs every chunk until the peer hangs up. Built as `connlog-server`. |
 | `server.cpp` | v1 server. Accepts one connection, logs the peer address and the descriptor numbers, exits. Built as `connlog-server-v1`. Kept as a reference for the minimal accept path. |
-| `client.cpp` | Connects to `127.0.0.1:8080`, prints its own address via `getsockname`, closes. Built as `connlog-client`. |
+| `client_v2.cpp` | Current client. Sends a message in three parts through a send-all loop; `slow` as argv[1] spaces them 500ms apart so the server logs separate chunks. Built as `connlog-client`. |
+| `client.cpp` | v1 client. Connects, prints its own address via `getsockname`, closes. Built as `connlog-client-v1`. |
 | `CMakeLists.txt` | Build + test definitions. Warning and sanitizer flags live in the `connlog_flags` interface target. |
 | `tests/smoke_test.sh` | End-to-end test: runs a real server and a real client against each other and asserts on the server's log. |
 | `scripts/dev.sh` | The dev CLI. Every routine task goes through it. |
@@ -27,7 +28,7 @@ syscall over a library that wraps it.
 
 ## Build system
 
-CMake ≥ 3.20, C++20, Ninja when available. Three binaries, one interface target
+CMake ≥ 3.20, C++20, Ninja when available. Four binaries, one interface target
 (`connlog_flags`) carrying the warning and sanitizer policy — new targets link it
 so flags never drift between binaries.
 
@@ -98,6 +99,13 @@ These are what the PR review gate enforces. Violating one blocks the merge.
   buffer.
 - Bind to `INADDR_ANY` only when the program is meant to be reachable; prefer
   `INADDR_LOOPBACK` for experiments.
+
+### Portability
+- This code is developed on macOS and built on Linux in CI, and the socket APIs
+  differ. `SO_NOSIGPIPE` is BSD/macOS only; Linux suppresses SIGPIPE with the
+  `MSG_NOSIGNAL` flag on each `send` instead. Guard platform-specific options
+  with `#ifdef` and provide the other platform's equivalent — `client_v2.cpp`
+  shows the pattern. CI builds on Linux, so a macOS-only symbol fails the build.
 
 ## Testing
 

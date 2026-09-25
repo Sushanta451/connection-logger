@@ -37,12 +37,16 @@ endif()
 # server.cpp    : v1, accepts one connection and logs the peer, then exits.
 # server_v2.cpp : current server, accepts one connection and logs every chunk
 #                 until the peer hangs up.
-# client.cpp    : connects to 127.0.0.1:8080 and reports its own end of the pair.
+# client.cpp    : v1, connects and reports its own end of the pair.
+# client_v2.cpp : current client, sends a message in three parts through a
+#                 send-all loop. Pass "slow" to space the parts 500ms apart and
+#                 watch the server log them as separate chunks.
 add_executable(connlog-server server_v2.cpp)
 add_executable(connlog-server-v1 server.cpp)
-add_executable(connlog-client client.cpp)
+add_executable(connlog-client client_v2.cpp)
+add_executable(connlog-client-v1 client.cpp)
 
-foreach(target connlog-server connlog-server-v1 connlog-client)
+foreach(target connlog-server connlog-server-v1 connlog-client connlog-client-v1)
   target_link_libraries(${target} PRIVATE connlog_flags)
 endforeach()
 
@@ -54,23 +58,27 @@ if(BUILD_TESTING)
 
   # End-to-end: run the real binaries against each other over a real socket and
   # assert on what the server logged. No mocks — this is the whole product.
-  add_test(NAME server_logs_connection_and_hangup
+  # The current pair: the client sends "Hello, world!" in three parts and the
+  # server has to log the bytes and then notice the hangup.
+  add_test(NAME server_logs_chunks_and_hangup
     COMMAND "${SMOKE_TEST}"
       $<TARGET_FILE:connlog-server>
       $<TARGET_FILE:connlog-client>
-      "Listening on 8080"
-      "Client connected."
-      "Client closed the connection.")
+      "Listening to port 8080"
+      "Client connected"
+      "Hello"
+      "world!"
+      "Client closed the connection")
 
   add_test(NAME server_v1_logs_peer_address
     COMMAND "${SMOKE_TEST}"
       $<TARGET_FILE:connlog-server-v1>
-      $<TARGET_FILE:connlog-client>
+      $<TARGET_FILE:connlog-client-v1>
       "wait for client"
       "Connection from 127.0.0.1:")
 
-  # Both servers bind the same hardcoded port, so never run them concurrently
+  # Every binary binds the same hardcoded port, so never run these concurrently
   # (ctest -j would otherwise hand one of them EADDRINUSE).
-  set_tests_properties(server_logs_connection_and_hangup server_v1_logs_peer_address
+  set_tests_properties(server_logs_chunks_and_hangup server_v1_logs_peer_address
     PROPERTIES RESOURCE_LOCK tcp_port_8080 TIMEOUT 30)
 endif()

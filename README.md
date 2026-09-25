@@ -5,12 +5,13 @@ accepts a connection and logs everything that arrives on it; a client connects a
 reports its own end of the pair. No frameworks — the syscalls are the point.
 
 ```
-$ ./scripts/dev.sh server              $ ./scripts/dev.sh client
-Listening on 8080...                   conncting to 127.0.01
-Client connected.                      connected
-                                       My end of the connection: 127.0.0.1:53124
-chunk 1: 5 bytes  [hello]
-Client closed the connection.
+$ ./scripts/dev.sh server              $ ./scripts/dev.sh client slow
+Listening to port 8080
+Client connected                       sent: [Hello]
+chuck 1:5bytes [ Hello]                sent: [, ]
+chuck 2:2bytes [ , ]                   sent: [world!]
+chuck 3:6bytes [ world!]
+Client closed the connection
 ```
 
 ## Getting started
@@ -30,7 +31,7 @@ Everything routine goes through `./scripts/dev.sh`:
 | --- | --- |
 | `build [--release\|--asan\|--werror]` | Configure + build |
 | `server [--v1]` | Run the server (`--v1` runs the original `server.cpp`) |
-| `client` | Run the client against `127.0.0.1:8080` |
+| `client [slow]` | Run the client against `127.0.0.1:8080` (`slow` spaces the sends out) |
 | `test` | Build, then run the CTest suite |
 | `lint` | clang-tidy over every source file |
 | `fmt [--check]` | clang-format |
@@ -44,7 +45,8 @@ Everything routine goes through `./scripts/dev.sh`:
 ```
 server_v2.cpp        current server — logs every chunk until the peer hangs up
 server.cpp           v1 server — logs the peer address, then exits
-client.cpp           connects, prints its own address, closes
+client_v2.cpp        current client — sends a message in three parts, send-all loop
+client.cpp           v1 client — connects, prints its own address, closes
 CMakeLists.txt       build + test definitions
 tests/smoke_test.sh  end-to-end test: real server + real client over a real socket
 scripts/dev.sh       the dev CLI
@@ -101,6 +103,9 @@ once, so the first PR after setup is what registers them.
 
 - Both servers handle exactly one connection, then exit. An accept loop is the
   obvious next step.
+- `SO_NOSIGPIPE` (macOS) and `MSG_NOSIGNAL` (Linux) are both needed to keep a
+  write to a hung-up peer from killing the client; `client_v2.cpp` guards them
+  with `#ifdef`.
 - The port is hardcoded to 8080 in all three binaries.
 - The smoke test asserts after the server exits, because `std::cout` is
   block-buffered when redirected to a file. A server that ran forever would need
