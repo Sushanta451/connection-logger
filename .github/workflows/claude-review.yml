@@ -29,6 +29,9 @@ jobs:
       contents: read
       pull-requests: write
       issues: write
+      # The action fetches an OIDC token even when it authenticates with an API
+      # key; without this it fails before the review runs.
+      id-token: write
 
     steps:
       - name: Checkout PR head
