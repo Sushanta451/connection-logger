@@ -4,11 +4,11 @@
 #   ./scripts/dev.sh build            configure + build (Debug)
 #   ./scripts/dev.sh build --release  optimized build
 #   ./scripts/dev.sh build --asan     build with AddressSanitizer + UBSan
-#   ./scripts/dev.sh server           run the current server (server_v2.cpp)
-#   ./scripts/dev.sh server --v1      run the v1 server (server.cpp)
+#   ./scripts/dev.sh server           run the current server (src/server/server_v2.cpp)
+#   ./scripts/dev.sh server --v1      run the v1 server (src/server/server.cpp)
 #   ./scripts/dev.sh client           run the client against 127.0.0.1:8080
 #   ./scripts/dev.sh client slow      same, but 500ms between the three sends
-#   ./scripts/dev.sh client --v1      run the v1 client (client.cpp)
+#   ./scripts/dev.sh client --v1      run the v1 client (src/client/client.cpp)
 #   ./scripts/dev.sh test             build, then run the CTest suite
 #   ./scripts/dev.sh lint             clang-tidy over every source file
 #   ./scripts/dev.sh fmt              clang-format in place
@@ -23,7 +23,7 @@ repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "${repo_root}"
 
 build_dir="build"
-sources=(server.cpp server_v2.cpp client.cpp client_v2.cpp)
+sources=(src/server/server.cpp src/server/server_v2.cpp src/client/client.cpp src/client/client_v2.cpp)
 
 die() { echo "error: $*" >&2; exit 1; }
 have() { command -v "$1" >/dev/null 2>&1; }

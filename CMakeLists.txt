@@ -34,17 +34,18 @@ if(ENABLE_ASAN)
 endif()
 
 # --- binaries -----------------------------------------------------------------
-# server.cpp    : v1, accepts one connection and logs the peer, then exits.
-# server_v2.cpp : current server, accepts one connection and logs every chunk
-#                 until the peer hangs up.
-# client.cpp    : v1, connects and reports its own end of the pair.
-# client_v2.cpp : current client, sends a message in three parts through a
-#                 send-all loop. Pass "slow" to space the parts 500ms apart and
-#                 watch the server log them as separate chunks.
-add_executable(connlog-server server_v2.cpp)
-add_executable(connlog-server-v1 server.cpp)
-add_executable(connlog-client client_v2.cpp)
-add_executable(connlog-client-v1 client.cpp)
+# src/server/server_v2.cpp : current server. Accepts one connection and logs
+#                            every chunk until the peer hangs up.
+# src/server/server.cpp    : v1. Accepts one connection, logs the peer, exits.
+# src/client/client_v2.cpp : current client. Sends a message in three parts
+#                            through a send-all loop. Pass "slow" to space the
+#                            parts 500ms apart and watch the server log them as
+#                            separate chunks.
+# src/client/client.cpp    : v1. Connects and reports its own end of the pair.
+add_executable(connlog-server src/server/server_v2.cpp)
+add_executable(connlog-server-v1 src/server/server.cpp)
+add_executable(connlog-client src/client/client_v2.cpp)
+add_executable(connlog-client-v1 src/client/client.cpp)
 
 foreach(target connlog-server connlog-server-v1 connlog-client connlog-client-v1)
   target_link_libraries(${target} PRIVATE connlog_flags)
