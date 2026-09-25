@@ -45,7 +45,10 @@ jobs:
         uses: anthropics/claude-code-action@v1
         with:
           anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
-          track_progress: true
+          # No track_progress here. It forces the action into "tag mode", which
+          # replaces claude_args' --allowedTools with its own defaults and never
+          # emits structured_output, so --json-schema fails with "Claude did not
+          # return structured_output" and the gate has no verdict to enforce.
           prompt: |
             REPO: ${{ github.repository }}
             PR NUMBER: ${{ github.event.pull_request.number }}
