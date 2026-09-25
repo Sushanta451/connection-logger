@@ -96,6 +96,16 @@ jobs:
             --allowedTools "mcp__github_inline_comment__create_inline_comment,Bash(gh pr comment:*),Bash(gh pr diff:*),Bash(gh pr view:*),Bash(git diff:*),Bash(git log:*),Bash(git show:*)"
             --json-schema '{"type":"object","additionalProperties":false,"required":["verdict","summary","blocking_issues","non_blocking_notes"],"properties":{"verdict":{"type":"string","enum":["approve","request_changes"]},"summary":{"type":"string","description":"Two sentences at most, for the check summary."},"blocking_issues":{"type":"array","items":{"type":"object","additionalProperties":false,"required":["file","line","issue","impact"],"properties":{"file":{"type":"string"},"line":{"type":"integer"},"issue":{"type":"string"},"impact":{"type":"string","description":"The concrete failure: which input or sequence produces which wrong result."}}}},"non_blocking_notes":{"type":"array","items":{"type":"string"}}}}'
 
+      # The action prints a condensed result (type/subtype/is_error) and drops the
+      # error text, so a failed review otherwise shows up only as "no verdict".
+      # This surfaces what actually went wrong: a bad model id, an auth or credit
+      # problem, a schema the CLI rejected.
+      - name: Show why the review failed
+        if: failure()
+        env:
+          EXECUTION_FILE: ${{ steps.claude.outputs.execution_file }}
+        run: python3 .github/scripts/dump_review_log.py
+
       - name: Enforce verdict
         if: always()
         env:
